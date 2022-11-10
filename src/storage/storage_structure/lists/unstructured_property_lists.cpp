@@ -16,7 +16,7 @@ void UnstructuredPropertyLists::readProperties(Transaction* transaction, ValueVe
     } else {
         for (auto i = 0u; i < nodeIDVector->state->selVector->selectedSize; ++i) {
             auto pos = nodeIDVector->state->selVector->selectedPositions[i];
-            readPropertiesForPosition(transaction, nodeIDVector, pos, propertyKeyToResultVectorMap);
+            readPropertiesForPositionNew(transaction, nodeIDVector, pos, propertyKeyToResultVectorMap);
         }
     }
 }
@@ -49,12 +49,14 @@ void UnstructuredPropertyLists::readPropertiesForPosition(Transaction* transacti
     }
 
     while (itr.hasNext()) {
+        // TODO: readNextPropKeyValue changes
         auto propertyKeyDataType = itr.readNextPropKeyValue();
         if (propertyKeyToResultVectorMap.contains(propertyKeyDataType.keyIdx)) {
             propertyKeysFound.insert(propertyKeyDataType.keyIdx);
             auto vector = propertyKeyToResultVectorMap.at(propertyKeyDataType.keyIdx);
             vector->setNull(pos, false);
             auto value = &((Value*)vector->values)[pos];
+            // TODO: this changes
             itr.copyValueOfCurrentProp(reinterpret_cast<uint8_t*>(&value->val));
             value->dataType.typeID = propertyKeyDataType.dataTypeID;
             if (propertyKeyDataType.dataTypeID == STRING) {
@@ -66,6 +68,72 @@ void UnstructuredPropertyLists::readPropertiesForPosition(Transaction* transacti
         // itr.copyValueOfCurrentProp, because itr.copyValueOfCurrentProp does not move the
         // curOff of the iterator.
         itr.skipValue();
+        if (propertyKeysFound.size() ==
+            propertyKeyToResultVectorMap.size()) { // all properties are found.
+            break;
+        }
+    }
+    for (auto& [key, vector] : propertyKeyToResultVectorMap) {
+        if (!propertyKeysFound.contains(key)) {
+            vector->setNull(pos, true);
+        }
+    }
+}
+
+// TODO: size, counter might be limited or bounded by the number of bytes in that page
+void UnstructuredPropertyLists::readPropertiesForPositionNew(Transaction* transaction,
+                                                          ValueVector* nodeIDVector, uint32_t pos,
+                                                          const unordered_map<uint32_t, ValueVector*>& propertyKeyToResultVectorMap) {
+    if (nodeIDVector->isNull(pos)) {
+        for (auto& [key, vector] : propertyKeyToResultVectorMap) {
+            vector->setNull(pos, true);
+        }
+        return;
+    }
+    unordered_set<uint32_t> propertyKeysFound;
+    auto nodeOffset = nodeIDVector->readNodeOffset(pos);
+    // This is declared outside to ensure that in case the if branch is executed, the allocated
+    // memory does not go out of space and we can keep a valid pointer in the pair above. In case
+    // the else branch executes, data is never used.
+    unique_ptr<UnstrPropListWrapper> primaryStoreListWrapper;
+    UnstrPropListIterator itr;
+    ListInfo info;
+    if (transaction->isReadOnly() || !localUpdatedLists.hasUpdatedList(nodeOffset)) {
+        info = getListInfo(nodeOffset);
+        auto primaryStoreData = make_unique<uint8_t[]>(info.numValuesInList);
+        fillUnstrPropListFromPrimaryStore(info, primaryStoreData.get());
+        primaryStoreListWrapper = make_unique<UnstrPropListWrapper>(
+                move(primaryStoreData), info.numValuesInList, info.numValuesInList /* capacity */);
+        itr = UnstrPropListIterator(primaryStoreListWrapper.get());
+    } else {
+        itr = localUpdatedLists.getUpdatedListIterator(nodeOffset);
+    }
+
+    uint8_t nElementsInList = info.numValuesInList / StorageConfig::UNSTR_PROP_ELEMENT_LEN;
+
+    uint64_t counter = 0;
+
+    while (itr.hasNext()) {
+        counter += 1;
+        auto propertyKey = itr.readNextProp();
+        if (propertyKeyToResultVectorMap.contains(propertyKey.keyIdx)) {
+            propertyKeysFound.insert(propertyKey.keyIdx);
+            auto vector = propertyKeyToResultVectorMap.at(propertyKey.keyIdx);
+            auto dataType = itr.readNextDatatype(nElementsInList, counter);
+            vector->setNull(pos, false);
+            auto value = &((Value*)vector->values)[pos];
+            // TODO: complete the function
+            itr.copyValueOfCurrentPropNew(reinterpret_cast<uint8_t*>(&value->val), nElementsInList, counter);
+            value->dataType.typeID = dataType.dataTypeID;
+            if (dataType.dataTypeID == STRING) {
+                overflowFile.readStringToVector(
+                        transaction, value->val.strVal, vector->getOverflowBuffer());
+            }
+        }
+        // We skipValue regardless of whether we found a property and called
+        // itr.copyValueOfCurrentProp, because itr.copyValueOfCurrentProp does not move the
+        // curOff of the iterator.
+        // itr.skipValue();
         if (propertyKeysFound.size() ==
             propertyKeyToResultVectorMap.size()) { // all properties are found.
             break;
@@ -143,6 +211,102 @@ void UnstructuredPropertyLists::readPropertyKeyAndDatatype(uint8_t* propertyKeyD
             idxInPageListToListPageIdxMapper);
     }
 }
+
+//unique_ptr<map<uint32_t, Literal>> UnstructuredPropertyLists::readUnstructuredPropertiesOfNodeNew(
+//        node_offset_t nodeOffset) {
+//    auto info = getListInfo(nodeOffset);
+//    auto retVal = make_unique<map<uint32_t /*unstructuredProperty pageIdx*/, Literal>>();
+//    PageByteCursor byteCursor{info.cursor.pageIdx, info.cursor.posInPage};
+//    auto propertyKey = UnstructuredPropertyKey{UINT32_MAX};
+//    auto dataType = UnstructuredDataType{ANY};
+//    Value* unstrPropertyValue;
+//    auto numBytesRead = 0u;
+//    auto counter = 0;
+//    auto numElementsInList = info.numValuesInList/StorageConfig::UNSTR_PROP_ELEMENT_LEN;
+//    while (numBytesRead < info.numValuesInList) {
+//        counter +=1;
+//        readPropertyKey((uint8_t*)(&propertyKey),  byteCursor, info.mapper);
+//        numBytesRead += StorageConfig::UNSTR_PROP_KEY_IDX_LEN;
+//        // TODO: update byteCursor here
+//        *unstrPropertyValue = readDatatypePropertyValue(&dataType, byteCursor,
+//                    info.mapper, numElementsInList, counter);
+//        auto dataTypeSize = Types::getDataTypeSize(dataType.dataTypeID);
+//        numBytesRead += StorageConfig::UNSTR_PROP_DATATYPE_LEN + dataTypeSize;
+//        Literal propertyValueAsLiteral;
+//        if (STRING == dataType.dataTypeID) {
+//            propertyValueAsLiteral =
+//                    Literal(overflowFile.readString(unstrPropertyValue.val.strVal));
+//        } else {
+//            propertyValueAsLiteral = Literal(
+//                    (uint8_t*)&unstrPropertyValue->val, DataType(dataType.dataTypeID));
+//        }
+//        retVal->insert(pair<uint32_t, Literal>(propertyKey.keyIdx, propertyValueAsLiteral));
+//    }
+//    return retVal;
+//}
+//
+//void UnstructuredPropertyLists::readPropertyKey(uint8_t* propertyKey,
+//    PageByteCursor& cursor, const function<uint32_t(uint32_t)>& idxInPageListToListPageIdxMapper) {
+//    auto totalNumBytesRead = 0u;
+//    auto bytesInCurrentPage = DEFAULT_PAGE_SIZE - cursor.offsetInPage;
+//    auto bytesToReadInCurrentPage =
+//            min((uint64_t)StorageConfig::UNSTR_PROP_KEY_IDX_LEN, bytesInCurrentPage);
+//    readFromAPage(
+//            propertyKey, bytesToReadInCurrentPage, cursor, idxInPageListToListPageIdxMapper);
+//    totalNumBytesRead += bytesToReadInCurrentPage;
+//    if (StorageConfig::UNSTR_PROP_KEY_IDX_LEN > totalNumBytesRead) { // move to next page
+//        cursor.pageIdx++;
+//        cursor.offsetInPage = 0;
+//        auto bytesToReadInNextPage = StorageConfig::UNSTR_PROP_KEY_IDX_LEN - totalNumBytesRead;
+//        // IMPORTANT NOTE: Pranjal used to use bytesInCurrentPage instead of totalNumBytesRead
+//        // in the following function. Xiyang think this is a bug and modify it.
+//        readFromAPage(propertyKey + totalNumBytesRead, bytesToReadInNextPage, cursor,
+//                      idxInPageListToListPageIdxMapper);
+//    }
+//}
+//
+//Value& UnstructuredPropertyLists::readDatatypePropertyValue(UnstructuredDataType* dataType, PageByteCursor& cursor,
+//    const function<uint32_t(uint32_t)>& idxInPageListToListPageIdxMapper, uint8_t numElementsInList, uint8_t counter) {
+//    auto totalNumBytesRead = 0u;
+//    PageByteCursor cursorHold = *(&cursor);
+//    cursor.offsetInPage = ((counter - 1) * (StorageConfig::UNSTR_PROP_DATATYPE_LEN + StorageConfig::UNSTR_PROP_VALUE_LEN
+//            ) + (numElementsInList - counter)*StorageConfig::UNSTR_PROP_HEADER_LEN);
+//    if (cursor.offsetInPage > DEFAULT_PAGE_SIZE) {
+//        cursor.pageIdx++;
+//        cursor.offsetInPage -= DEFAULT_PAGE_SIZE;
+//    }
+//    auto bytesInCurrentPage = DEFAULT_PAGE_SIZE - cursor.offsetInPage;
+//    auto bytesToReadInCurrentPage = min((uint64_t)StorageConfig::UNSTR_PROP_DATATYPE_LEN, bytesInCurrentPage);
+//    readFromAPage((uint8_t*)dataType, bytesToReadInCurrentPage, cursor, idxInPageListToListPageIdxMapper);
+//    totalNumBytesRead += bytesToReadInCurrentPage;
+//    if (StorageConfig::UNSTR_PROP_KEY_IDX_LEN > totalNumBytesRead) { // move to next page
+//        cursor.pageIdx++;
+//        cursor.offsetInPage = 0;
+//        auto bytesToReadInNextPage = StorageConfig::UNSTR_PROP_KEY_IDX_LEN - totalNumBytesRead;
+//        // IMPORTANT NOTE: Pranjal used to use bytesInCurrentPage instead of totalNumBytesRead
+//        // in the following function. Xiyang think this is a bug and modify it.
+//        readFromAPage((uint8_t*)dataType + totalNumBytesRead, bytesToReadInNextPage, cursor,
+//                      idxInPageListToListPageIdxMapper);
+//    }
+//    cursor.offsetInPage += StorageConfig::UNSTR_PROP_DATATYPE_LEN;
+//
+//    uint64_t dataTypeSize = Types::getDataTypeSize(dataType->dataTypeID);
+//    Value unstrPropertyValue{DataType(dataType->dataTypeID)};
+//    bytesInCurrentPage = DEFAULT_PAGE_SIZE - cursor.offsetInPage;
+//    bytesToReadInCurrentPage = min(dataTypeSize, bytesInCurrentPage);
+//    readFromAPage(((uint8_t*)&unstrPropertyValue.val), bytesToReadInCurrentPage, cursor,
+//                  idxInPageListToListPageIdxMapper);
+//    totalNumBytesRead += bytesToReadInCurrentPage;
+//    if (dataTypeSize > totalNumBytesRead) { // move to next page
+//        cursor.pageIdx++;
+//        cursor.offsetInPage = 0;
+//        auto bytesToReadInNextPage = dataTypeSize - totalNumBytesRead;
+//        readFromAPage(((uint8_t*)&unstrPropertyValue.val) + totalNumBytesRead, bytesToReadInNextPage,
+//                      cursor, idxInPageListToListPageIdxMapper);
+//    }
+//    *(&cursor) = cursorHold;
+//    return unstrPropertyValue;
+//}
 
 void UnstructuredPropertyLists::readPropertyValue(Value* propertyValue, uint64_t dataTypeSize,
     PageByteCursor& cursor, const function<uint32_t(uint32_t)>& idxInPageListToListPageIdxMapper) {

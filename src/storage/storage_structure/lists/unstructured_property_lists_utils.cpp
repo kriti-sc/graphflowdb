@@ -45,6 +45,35 @@ UnstructuredPropertyKeyDataType& UnstrPropListIterator::readNextPropKeyValue() {
     return propKeyDataTypeForRetVal;
 }
 
+//UnstructuredPropertyKeyDataType& UnstrPropListIterator::readNextPropKeyValueNew(uint64_t size, uint64_t counter) {
+//    memcpy(reinterpret_cast<uint8_t*>(&propKeyDataTypeForRetVal.keyIdx),
+//           unstrPropListWrapper->data.get() + curOff, StorageConfig::UNSTR_PROP_HEADER_LEN);
+//    uint64_t nextCurOff = curOff + StorageConfig::UNSTR_PROP_HEADER_LEN;
+//    curOff = (counter*(StorageConfig::UNSTR_PROP_DATATYPE_LEN+<value>)) +
+//            ((size/<total size>) - counter -1)*StorageConfig::UNSTR_PROP_HEADER_LEN;
+//    memcpy(reinterpret_cast<uint8_t*>(&propKeyDataTypeForRetVal.dataTypeID),
+//           unstrPropListWrapper->data.get() + curOff, StorageConfig::UNSTR_PROP_HEADER_LEN);
+//    curOff = nextCurOff;
+//    return propKeyDataTypeForRetVal;
+//}
+
+UnstructuredPropertyKey& UnstrPropListIterator::readNextProp() {
+    memcpy(reinterpret_cast<uint8_t*>(&propKeyForRetVal),
+           unstrPropListWrapper->data.get() + curOff, StorageConfig::UNSTR_PROP_KEY_IDX_LEN);
+    curOff += StorageConfig::UNSTR_PROP_KEY_IDX_LEN;
+    return propKeyForRetVal;
+}
+
+UnstructuredDataType& UnstrPropListIterator::readNextDatatype(uint8_t totalElementsInList, uint64_t counter) {
+    uint64_t curOffOld = curOff;
+    curOff = ((counter-1)*(StorageConfig::UNSTR_PROP_DATATYPE_LEN+StorageConfig::UNSTR_PROP_VALUE_LEN)) +
+             ((totalElementsInList - counter)*StorageConfig::UNSTR_PROP_KEY_IDX_LEN);
+    memcpy(reinterpret_cast<uint8_t*>(&propKeyForRetVal),
+           unstrPropListWrapper->data.get() + curOff, StorageConfig::UNSTR_PROP_DATATYPE_LEN);
+    curOff = curOffOld + StorageConfig::UNSTR_PROP_DATATYPE_LEN;
+    return dataTypeForRetVal;
+}
+
 void UnstrPropListIterator::skipValue() {
     curOff += Types::getDataTypeSize(propKeyDataTypeForRetVal.dataTypeID);
     propKeyDataTypeForRetVal.keyIdx = UINT32_MAX;

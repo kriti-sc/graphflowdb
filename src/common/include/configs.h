@@ -63,10 +63,16 @@ struct StorageConfig {
     static constexpr char CATALOG_FILE_NAME_FOR_WAL[] = "catalog.bin.wal";
     constexpr static double ARRAY_RESIZING_FACTOR = 1.2;
 
+    // KEYOFFSETKEYOFFSET....DATATYPEVALUEDATATYPEVALUE
     constexpr static uint8_t UNSTR_PROP_KEY_IDX_LEN = 4;
+    // OFFSET will be 12 bit, thus will require 16 bits for storage
+    constexpr static uint8_t UNSTR_PROP_OFFSET_LEN = 2;
     constexpr static uint8_t UNSTR_PROP_DATATYPE_LEN = 1;
+    constexpr static uint8_t UNSTR_PROP_VALUE_LEN = 8;
     constexpr static uint8_t UNSTR_PROP_HEADER_LEN =
         UNSTR_PROP_KEY_IDX_LEN + UNSTR_PROP_DATATYPE_LEN;
+    constexpr static uint8_t UNSTR_PROP_ELEMENT_LEN =
+            UNSTR_PROP_KEY_IDX_LEN + UNSTR_PROP_DATATYPE_LEN + UNSTR_PROP_VALUE_LEN;
 };
 
 struct ListsMetadataConfig {

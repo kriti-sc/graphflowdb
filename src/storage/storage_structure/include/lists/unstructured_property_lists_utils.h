@@ -15,6 +15,14 @@ struct UnstructuredPropertyKeyDataType {
     DataTypeID dataTypeID;
 };
 
+struct UnstructuredPropertyKey {
+    uint32_t keyIdx;
+};
+
+struct UnstructuredDataType {
+    DataTypeID dataTypeID;
+};
+
 struct UnstrPropListWrapper {
 
     UnstrPropListWrapper(unique_ptr<uint8_t[]> data, uint64_t size, uint64_t capacity)
@@ -44,6 +52,8 @@ public:
     inline bool hasNext() { return curOff < unstrPropListWrapper->size; }
 
     UnstructuredPropertyKeyDataType& readNextPropKeyValue();
+    UnstructuredPropertyKey& readNextProp();
+    UnstructuredDataType& readNextDatatype(uint8_t totalElementsInList, uint64_t counter);
 
     void skipValue();
 
@@ -52,6 +62,11 @@ public:
     inline uint64_t getDataTypeSizeOfCurrProp() {
         assert(propKeyDataTypeForRetVal.keyIdx != UINT32_MAX);
         return Types::getDataTypeSize(propKeyDataTypeForRetVal.dataTypeID);
+    }
+
+    inline uint64_t getDataTypeSizeOfCurrPropNew() {
+        assert(propKeyForRetVal.keyIdx != UINT32_MAX);
+        return Types::getDataTypeSize(dataTypeForRetVal.dataTypeID);
     }
 
     inline uint64_t getOffsetAtBeginningOfCurrProp() {
@@ -63,9 +78,20 @@ public:
         memcpy(dst, unstrPropListWrapper->data.get() + curOff, getDataTypeSizeOfCurrProp());
     }
 
+    void copyValueOfCurrentPropNew(uint8_t* dst, uint8_t totalElementsInList, uint64_t counter) {
+        int64_t oldCur = curOff;
+        curOff = ((counter-1)*(StorageConfig::UNSTR_PROP_DATATYPE_LEN+StorageConfig::UNSTR_PROP_VALUE_LEN)) +
+                 ((totalElementsInList - counter)*StorageConfig::UNSTR_PROP_KEY_IDX_LEN) +
+                StorageConfig::UNSTR_PROP_DATATYPE_LEN;
+        memcpy(dst, unstrPropListWrapper->data.get() + curOff, getDataTypeSizeOfCurrPropNew());
+        curOff = oldCur;
+    }
+
 private:
     UnstrPropListWrapper* unstrPropListWrapper;
     UnstructuredPropertyKeyDataType propKeyDataTypeForRetVal;
+    UnstructuredPropertyKey propKeyForRetVal;
+    UnstructuredDataType dataTypeForRetVal;
     uint64_t curOff;
 };
 

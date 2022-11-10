@@ -35,6 +35,7 @@ public:
 
     // Currently, used only in CopyCSV tests.
     unique_ptr<map<uint32_t, Literal>> readUnstructuredPropertiesOfNode(node_offset_t nodeOffset);
+    // unique_ptr<map<uint32_t, Literal>> readUnstructuredPropertiesOfNodeNew(node_offset_t nodeOffset);
 
     // Prepares all the db file changes necessary to update the "persistent" unstructured property
     // lists with the UpdatedUnstructuredPropertyLists localUpdatedLists, which stores the updates
@@ -51,9 +52,18 @@ private:
     void fillUnstrPropListFromPrimaryStore(ListInfo& listInfo, uint8_t* dataToFill);
     void readPropertiesForPosition(Transaction* transaction, ValueVector* nodeIDVector,
         uint32_t pos, const unordered_map<uint32_t, ValueVector*>& propertyKeyToResultVectorMap);
+    void readPropertiesForPositionNew(Transaction* transaction, ValueVector* nodeIDVector,
+        uint32_t pos, const unordered_map<uint32_t, ValueVector*>& propertyKeyToResultVectorMap);
 
     void readPropertyKeyAndDatatype(uint8_t* propertyKeyDataType, PageByteCursor& cursor,
         const std::function<uint32_t(uint32_t)>& idxInPageListToListPageIdxMapper);
+
+//    void readPropertyKey(uint8_t* propertyKeyDataType, PageByteCursor& cursor,
+//        const std::function<uint32_t(uint32_t)>& idxInPageListToListPageIdxMapper);
+//
+//    Value &readDatatypePropertyValue(UnstructuredDataType *dataType, PageByteCursor &cursor,
+//                                     const function<uint32_t(uint32_t)> &idxInPageListToListPageIdxMapper,
+//                                     uint8_t numElementsInList, uint8_t counter);
 
     void readPropertyValue(Value* propertyValue, uint64_t dataTypeSize, PageByteCursor& cursor,
         const std::function<uint32_t(uint32_t)>& idxInPageListToListPageIdxMapper);
