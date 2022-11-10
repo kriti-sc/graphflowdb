@@ -236,7 +236,7 @@ void InMemNodeCSVCopier::populateUnstrPropertyListsTask(
         for (auto i = 0u; i < copier->nodeTableSchema->getNumStructuredProperties(); ++i) {
             reader.hasNextToken();
         }
-        putUnstrPropsOfALineToLists(reader, nodeOffsetStart + bufferOffset, overflowPagesCursor,
+        putUnstrPropsOfALineToListsKeysValueSep(reader, nodeOffsetStart + bufferOffset, overflowPagesCursor,
             unstrPropertiesNameToIdMap,
             reinterpret_cast<InMemUnstructuredLists*>(copier->unstrPropertyLists.get()));
         bufferOffset++;
@@ -308,6 +308,108 @@ void InMemNodeCSVCopier::putPropsOfLineIntoColumns(
             if (!reader.skipTokenIfNull()) {
                 reader.skipToken();
             }
+        }
+    }
+}
+
+map<uint16_t, string> InMemNodeCSVCopier::sortUnstrPropsOfALine(CSVReader& reader,
+   unordered_map<string, uint64_t>& unstrPropertiesNameToIdMap) {
+
+    // TODO: is char* the correct way to represent?
+    map<uint16_t, string> propertyKeysToRawCSVInputMapping;
+    while (reader.hasNextToken()) {
+        auto unstrPropertyString = reader.getString();
+        auto unstrPropertyStringBreaker1 = strchr(unstrPropertyString, ':');
+        *unstrPropertyStringBreaker1 = 0;
+        auto propertyKeyId = (uint32_t)unstrPropertiesNameToIdMap.at(string(unstrPropertyString));
+        // TODO: fix this maybe because of the strchr issue
+        propertyKeysToRawCSVInputMapping[propertyKeyId] = string(unstrPropertyStringBreaker1 + 1);
+    }
+    // maps are sorted by key: https://en.cppreference.com/w/cpp/container/map
+    return propertyKeysToRawCSVInputMapping;
+}
+
+// sets unstructured property lists with keys and values sep. 
+void InMemNodeCSVCopier::putUnstrPropsOfALineToListsKeysValueSep(CSVReader& reader, node_offset_t nodeOffset,
+    PageByteCursor& overflowPagesCursor,
+    unordered_map<string, uint64_t>& unstrPropertiesNameToIdMap,
+    InMemUnstructuredLists* unstrPropertyLists) {
+
+    auto propertyKeysToRawCSVInputMapping = sortUnstrPropsOfALine(reader, unstrPropertiesNameToIdMap);
+
+    map<uint16_t , string>::iterator it;
+
+    for (it = propertyKeysToRawCSVInputMapping.begin(); it != propertyKeysToRawCSVInputMapping.end(); it++) {
+        // TODO: pointer and string split issue with strchr. Fix assumptions before it->second
+        auto propertyKeyId = it->first;
+        // TODO: datatype size is fixed. From list len, num of elements can be figured out
+        auto reversePos = InMemListsUtils::decrementListSize(*unstrPropertyLists->getListSizes(),
+            nodeOffset, StorageConfig::UNSTR_PROP_KEY_IDX_LEN);
+        // TODO: header builder and metadata builder - do they contain property datatype info? if so, assumptions change
+        PageElementCursor pageElementCursor = InMemListsUtils::calcPageElementCursor(
+            unstrPropertyLists->getListHeadersBuilder()->getHeader(nodeOffset), reversePos, 1,
+            nodeOffset, *unstrPropertyLists->getListsMetadataBuilder(), false /*hasNULLBytes*/);
+        PageByteCursor pageCursor{pageElementCursor.pageIdx, pageElementCursor.posInPage};
+        unstrPropertyLists->setUnstructuredElement(pageCursor, propertyKeyId);
+    }
+
+
+    // TODO: start writing datatype + value
+    for (it = propertyKeysToRawCSVInputMapping.begin(); it != propertyKeysToRawCSVInputMapping.end(); it++) {
+        auto unstrPropertyString = it->second;
+        auto delimPos = unstrPropertyString.find(':');
+        auto dataType = Types::dataTypeFromString(unstrPropertyString.substr(0, delimPos));
+        auto dataTypeSize = Types::getDataTypeSize(dataType);
+        auto reversePos = InMemListsUtils::decrementListSize(*unstrPropertyLists->getListSizes(),
+            nodeOffset, StorageConfig::UNSTR_PROP_DATATYPE_LEN + dataTypeSize);
+        PageElementCursor pageElementCursor = InMemListsUtils::calcPageElementCursor(
+            unstrPropertyLists->getListHeadersBuilder()->getHeader(nodeOffset), reversePos, 1,
+            nodeOffset, *unstrPropertyLists->getListsMetadataBuilder(), false /*hasNULLBytes*/);
+        PageByteCursor pageCursor{pageElementCursor.pageIdx, pageElementCursor.posInPage};
+        auto value = unstrPropertyString.substr(delimPos+1);
+        char* valuePtr = &value[0];
+        switch (dataType.typeID) {
+        case INT64: {
+            auto intVal = TypeUtils::convertToInt64(valuePtr);
+            unstrPropertyLists->setUnstructuredElement(pageCursor, dataType.typeID, (uint8_t*)(&intVal),
+                &overflowPagesCursor);
+        } break;
+        case DOUBLE: {
+            auto doubleVal = TypeUtils::convertToDouble(valuePtr);
+            unstrPropertyLists->setUnstructuredElement(pageCursor, dataType.typeID,
+                reinterpret_cast<uint8_t*>(&doubleVal), &overflowPagesCursor);
+        } break;
+        case BOOL: {
+            auto boolVal = TypeUtils::convertToBoolean(valuePtr);
+            unstrPropertyLists->setUnstructuredElement(pageCursor, dataType.typeID,
+                reinterpret_cast<uint8_t*>(&boolVal), &overflowPagesCursor);
+        } break;
+        case DATE: {
+            char* beginningOfDateStr = valuePtr;
+            date_t dateVal = Date::FromCString(beginningOfDateStr, strlen(beginningOfDateStr));
+            unstrPropertyLists->setUnstructuredElement(pageCursor, dataType.typeID,
+                reinterpret_cast<uint8_t*>(&dateVal), &overflowPagesCursor);
+        } break;
+        case TIMESTAMP: {
+            char* beginningOfTimestampStr = valuePtr;
+            timestamp_t timestampVal =
+                Timestamp::FromCString(beginningOfTimestampStr, strlen(beginningOfTimestampStr));
+            unstrPropertyLists->setUnstructuredElement(pageCursor, dataType.typeID,
+                reinterpret_cast<uint8_t*>(&timestampVal), &overflowPagesCursor);
+        } break;
+        case INTERVAL: {
+            char* beginningOfIntervalStr = valuePtr;
+            interval_t intervalVal =
+                Interval::FromCString(beginningOfIntervalStr, strlen(beginningOfIntervalStr));
+            unstrPropertyLists->setUnstructuredElement(pageCursor, dataType.typeID,
+                reinterpret_cast<uint8_t*>(&intervalVal), &overflowPagesCursor);
+        } break;
+        case STRING: {
+            unstrPropertyLists->setUnstructuredElement(pageCursor, dataType.typeID,
+                reinterpret_cast<uint8_t*>(valuePtr), &overflowPagesCursor);
+        } break;
+        default:
+            throw CopyCSVException("unsupported dataType while parsing unstructured property");
         }
     }
 }

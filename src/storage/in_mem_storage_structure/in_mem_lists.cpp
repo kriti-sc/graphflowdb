@@ -16,6 +16,8 @@ PageElementCursor InMemListsUtils::calcPageElementCursor(uint32_t header, uint64
     } else {
         auto chunkId = StorageUtils::getListChunkIdx(nodeOffset);
         auto [listLen, csrOffset] = ListHeaders::getSmallListLenAndCSROffset(header);
+        // TODO: The first time this is called is when the first property key is being written
+        // in which case isn't this incorrect?
         auto pos = listLen - reversePos;
         cursor = PageUtils::getPageElementCursorForPos(csrOffset + pos, numElementsInAPage);
         cursor.pageIdx = metadataBuilder.getPageMapperForChunkIdx(chunkId)(
@@ -108,6 +110,44 @@ void InMemUnstructuredLists::setUnstructuredElement(PageByteCursor& cursor, uint
     }
 }
 
+// TODO: Add flag to request new page
+// This may not be needed. ++ gives us a new page.
+void InMemUnstructuredLists::setUnstructuredElement(PageByteCursor& cursor, uint32_t propertyKey) {
+    PageByteCursor localCursor{cursor};
+
+    setComponentOfUnstrProperty(localCursor, StorageConfig::UNSTR_PROP_KEY_IDX_LEN,
+                                reinterpret_cast<uint8_t*>(&propertyKey));
+}
+
+void InMemUnstructuredLists::setUnstructuredElement(PageByteCursor& cursor, DataTypeID dataTypeID, 
+    const uint8_t* val, PageByteCursor* overflowCursor) {
+    PageByteCursor localCursor{cursor};
+    setComponentOfUnstrProperty(localCursor, StorageConfig::UNSTR_PROP_DATATYPE_LEN,
+        reinterpret_cast<uint8_t*>(&dataTypeID));
+    switch (dataTypeID) {
+    case INT64:
+    case DOUBLE:
+    case BOOL:
+    case DATE:
+    case TIMESTAMP:
+    case INTERVAL: {
+        setComponentOfUnstrProperty(localCursor, Types::getDataTypeSize(dataTypeID), val);
+    } break;
+    case STRING: {
+        auto gfString = overflowInMemFile->copyString((const char*)val, *overflowCursor);
+        val = (uint8_t*)(&gfString);
+        setComponentOfUnstrProperty(localCursor, Types::getDataTypeSize(dataTypeID), val);
+    } break;
+    case LIST: {
+        auto gfList = overflowInMemFile->copyList(*(Literal*)val, *overflowCursor);
+        val = (uint8_t*)(&gfList);
+        setComponentOfUnstrProperty(localCursor, Types::getDataTypeSize(dataTypeID), val);
+    } break;
+    default:
+        throw CopyCSVException("Unsupported data type for unstructured list.");
+    }
+}
+
 void InMemUnstructuredLists::setComponentOfUnstrProperty(
     PageByteCursor& localCursor, uint8_t len, const uint8_t* val) {
     if (DEFAULT_PAGE_SIZE - localCursor.offsetInPage >= len) {
@@ -125,6 +165,25 @@ void InMemUnstructuredLists::setComponentOfUnstrProperty(
         localCursor.offsetInPage = left;
     }
 }
+//
+//void InMemUnstructuredLists::setComponentOfUnstrPropertyRED(
+//        PageByteCursor& localCursor, uint8_t len, const uint8_t* val) {
+//    // TODO: After changes it should always go in the first branch
+//    if (DEFAULT_PAGE_SIZE - localCursor.offsetInPage >= len) {
+//        memcpy(inMemFile->getPage(localCursor.pageIdx)->data + localCursor.offsetInPage, val, len);
+//        localCursor.offsetInPage += len;
+//    } else {
+//        auto diff = DEFAULT_PAGE_SIZE - localCursor.offsetInPage;
+//        auto writeOffset = inMemFile->getPage(localCursor.pageIdx)->data + localCursor.offsetInPage;
+//        memcpy(writeOffset, val, diff);
+//        auto left = len - diff;
+//        localCursor.pageIdx++;
+//        localCursor.offsetInPage = 0;
+//        writeOffset = inMemFile->getPage(localCursor.pageIdx)->data + localCursor.offsetInPage;
+//        memcpy(writeOffset, val + diff, left);
+//        localCursor.offsetInPage = left;
+//    }
+//}
 
 void InMemUnstructuredLists::saveToFile() {
     listHeadersBuilder->saveToDisk();

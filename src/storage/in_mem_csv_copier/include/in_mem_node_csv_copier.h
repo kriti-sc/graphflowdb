@@ -33,6 +33,10 @@ private:
         PageByteCursor& stringOvfPagesCursor,
         unordered_map<string, uint64_t>& unstrPropertiesNameToIdMap,
         InMemUnstructuredLists* unstrPropertyLists);
+    static void putUnstrPropsOfALineToListsKeysValueSep(CSVReader& reader, node_offset_t nodeOffset,
+         PageByteCursor& stringOvfPagesCursor,
+         unordered_map<string, uint64_t>& unstrPropertiesNameToIdMap,
+         InMemUnstructuredLists* unstrPropertyLists);
 
     static void putPropsOfLineIntoColumns(vector<unique_ptr<InMemColumn>>& columns,
         const vector<Property>& properties, vector<PageByteCursor>& overflowCursors,
@@ -58,6 +62,9 @@ private:
     vector<unique_ptr<InMemColumn>> structuredColumns;
     unique_ptr<InMemUnstructuredLists> unstrPropertyLists;
     NodesStatisticsAndDeletedIDs* nodesStatisticsAndDeletedIDs;
+
+    static std::map<uint16_t, string> sortUnstrPropsOfALine(
+            CSVReader &reader, unordered_map<string, uint64_t> &unstrPropertiesNameToIdMap);
 };
 
 } // namespace storage

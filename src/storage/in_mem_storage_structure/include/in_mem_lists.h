@@ -121,6 +121,9 @@ public:
 
     void setUnstructuredElement(PageByteCursor& cursor, uint32_t propertyKey, DataTypeID dataTypeID,
         const uint8_t* val, PageByteCursor* overflowCursor);
+    void setUnstructuredElement(PageByteCursor &cursor, uint32_t propertyKey);
+    void setUnstructuredElement(PageByteCursor& cursor, DataTypeID dataTypeID, const uint8_t* val,
+        PageByteCursor* overflowCursor);
 
     void saveToFile() override;
 
