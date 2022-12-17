@@ -1,0 +1,2 @@
+ID,fName,gender,isStudent,isWorker,age,eyeSight,birthdate,registerTime,lastJobDuration,workedHours,usedNames,courseScoresPerTerm
+11,Hubert Blaine Wolfeschlegelsteinhausenbergerdorff,2,false,true,83,4.9,1990-11-27,2023-02-21 13:25:30,3 years 2 days 13 hours 2 minutes,bnstrTimestampProp1:DATE:2023-02-21,aunstrTimestampProp2:DATE:2023-02-21,abbbastrTimestampProp3:DATE:2024-02-21,label2:STRING:good,unstrBoolProp1:BOOLEAN:True
