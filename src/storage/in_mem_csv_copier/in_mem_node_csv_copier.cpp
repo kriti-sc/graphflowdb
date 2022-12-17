@@ -17,6 +17,7 @@ InMemNodeCSVCopier::InMemNodeCSVCopier(CSVDescription& csvDescription, string ou
 }
 
 void InMemNodeCSVCopier::copy() {
+    auto start = std::chrono::high_resolution_clock::now();
     logger->info(
         "Copying node {} with table {}.", nodeTableSchema->tableName, nodeTableSchema->tableID);
     calculateNumBlocks(csvDescription.filePath, nodeTableSchema->tableName);
@@ -35,6 +36,9 @@ void InMemNodeCSVCopier::copy() {
     nodesStatisticsAndDeletedIDs->setMaxNodeOffsetForTable(nodeTableSchema->tableID, numNodes - 1);
     logger->info("Done copying node {} with table {}.", nodeTableSchema->tableName,
         nodeTableSchema->tableID);
+    auto finish = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> elapsed = finish - start;
+    std::cout << "Elapsed time for search, fetch and parse: " << elapsed.count() << " s\n";
 }
 
 void InMemNodeCSVCopier::initializeColumnsAndList() {
@@ -184,9 +188,11 @@ void InMemNodeCSVCopier::calcLengthOfUnstrPropertyLists(
         auto unstrPropertyString = reader.getString();
         auto startPos = strchr(unstrPropertyString, ':') + 1;
         *strchr(startPos, ':') = 0;
+//        InMemListsUtils::incrementListSize(*unstrPropertyLists->getListSizes(), nodeOffset,
+//            StorageConfig::UNSTR_PROP_HEADER_LEN +
+//                Types::getDataTypeSize(Types::dataTypeFromString(string(startPos))));
         InMemListsUtils::incrementListSize(*unstrPropertyLists->getListSizes(), nodeOffset,
-            StorageConfig::UNSTR_PROP_HEADER_LEN +
-                Types::getDataTypeSize(Types::dataTypeFromString(string(startPos))));
+           StorageConfig::UNSTR_PROP_ELEMENT_LEN);
     }
 }
 
@@ -323,6 +329,7 @@ map<uint16_t, string> InMemNodeCSVCopier::sortUnstrPropsOfALine(CSVReader& reade
         *unstrPropertyStringBreaker1 = 0;
         auto propertyKeyId = (uint32_t)unstrPropertiesNameToIdMap.at(string(unstrPropertyString));
         // TODO: fix this maybe because of the strchr issue
+        // cout<<"Property: "+string(unstrPropertyString)<<"   "+to_string(propertyKeyId)<<endl;
         propertyKeysToRawCSVInputMapping[propertyKeyId] = string(unstrPropertyStringBreaker1 + 1);
     }
     // maps are sorted by key: https://en.cppreference.com/w/cpp/container/map
@@ -339,9 +346,11 @@ void InMemNodeCSVCopier::putUnstrPropsOfALineToListsKeysValueSep(CSVReader& read
 
     map<uint16_t , string>::iterator it;
 
+    // cout<<"In order"<<endl;
     for (it = propertyKeysToRawCSVInputMapping.begin(); it != propertyKeysToRawCSVInputMapping.end(); it++) {
         // TODO: pointer and string split issue with strchr. Fix assumptions before it->second
         auto propertyKeyId = it->first;
+        // cout<<to_string(propertyKeyId)<<endl;
         // TODO: datatype size is fixed. From list len, num of elements can be figured out
         auto reversePos = InMemListsUtils::decrementListSize(*unstrPropertyLists->getListSizes(),
             nodeOffset, StorageConfig::UNSTR_PROP_KEY_IDX_LEN);
@@ -359,7 +368,7 @@ void InMemNodeCSVCopier::putUnstrPropsOfALineToListsKeysValueSep(CSVReader& read
         auto unstrPropertyString = it->second;
         auto delimPos = unstrPropertyString.find(':');
         auto dataType = Types::dataTypeFromString(unstrPropertyString.substr(0, delimPos));
-        auto dataTypeSize = Types::getDataTypeSize(dataType);
+        auto dataTypeSize = StorageConfig::UNSTR_PROP_VALUE_LEN;  // Types::getDataTypeSize(dataType);
         auto reversePos = InMemListsUtils::decrementListSize(*unstrPropertyLists->getListSizes(),
             nodeOffset, StorageConfig::UNSTR_PROP_DATATYPE_LEN + dataTypeSize);
         PageElementCursor pageElementCursor = InMemListsUtils::calcPageElementCursor(
@@ -385,6 +394,7 @@ void InMemNodeCSVCopier::putUnstrPropsOfALineToListsKeysValueSep(CSVReader& read
                 reinterpret_cast<uint8_t*>(&boolVal), &overflowPagesCursor);
         } break;
         case DATE: {
+            // cout<<"Writing date"<<endl;
             char* beginningOfDateStr = valuePtr;
             date_t dateVal = Date::FromCString(beginningOfDateStr, strlen(beginningOfDateStr));
             unstrPropertyLists->setUnstructuredElement(pageCursor, dataType.typeID,

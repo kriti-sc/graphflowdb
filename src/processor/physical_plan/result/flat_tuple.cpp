@@ -24,5 +24,18 @@ string FlatTuple::toString(const vector<uint32_t>& colsWidth, const string& deli
     return result.str();
 }
 
+string FlatTuple::toString() {
+    ostringstream result;
+    for (auto i = 0ul; i < values.size(); i++) {
+        string value = nullMask[i] ? "" : TypeUtils::toString(*values[i]);
+        value = " " + value + " ";
+        result << left << setw((int)50) << setfill(' ') << value;
+        if (i != values.size() - 1) {
+            result << "|";
+        }
+    }
+    return result.str();
+}
+
 } // namespace processor
 } // namespace graphflow

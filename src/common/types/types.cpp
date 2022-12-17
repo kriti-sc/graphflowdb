@@ -149,16 +149,21 @@ const uint32_t Types::getDataTypeSize(DataTypeID dataTypeID) {
         return sizeof(uint8_t);
     case INT64:
         return sizeof(int64_t);
+        // return 16;
     case DOUBLE:
         return sizeof(double_t);
     case DATE:
         return sizeof(date_t);
+        // return 16;
     case TIMESTAMP:
         return sizeof(timestamp_t);
+        // return 16;
     case INTERVAL:
         return sizeof(interval_t);
+        // return 16;
     case STRING:
         return sizeof(gf_string_t);
+        // return 16;
     case UNSTRUCTURED:
         return sizeof(Value);
     case LIST:

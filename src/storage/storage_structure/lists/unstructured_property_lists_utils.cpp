@@ -60,17 +60,20 @@ UnstructuredPropertyKeyDataType& UnstrPropListIterator::readNextPropKeyValue() {
 UnstructuredPropertyKey& UnstrPropListIterator::readNextProp() {
     memcpy(reinterpret_cast<uint8_t*>(&propKeyForRetVal),
            unstrPropListWrapper->data.get() + curOff, StorageConfig::UNSTR_PROP_KEY_IDX_LEN);
+    cout<<"cur for prop: "+ to_string(curOff)<<endl;
     curOff += StorageConfig::UNSTR_PROP_KEY_IDX_LEN;
     return propKeyForRetVal;
 }
 
 UnstructuredDataType& UnstrPropListIterator::readNextDatatype(uint8_t totalElementsInList, uint64_t counter) {
     uint64_t curOffOld = curOff;
-    curOff = ((counter-1)*(StorageConfig::UNSTR_PROP_DATATYPE_LEN+StorageConfig::UNSTR_PROP_VALUE_LEN)) +
+    cout<<"old cur for datatype: "+ to_string(curOff)<<endl;
+    curOff = curOff + ((counter-1)*(StorageConfig::UNSTR_PROP_DATATYPE_LEN+StorageConfig::UNSTR_PROP_VALUE_LEN)) +
              ((totalElementsInList - counter)*StorageConfig::UNSTR_PROP_KEY_IDX_LEN);
-    memcpy(reinterpret_cast<uint8_t*>(&propKeyForRetVal),
+    cout<<"cur for datatype: "+ to_string(curOff)<<endl;
+    memcpy(reinterpret_cast<uint8_t*>(&dataTypeForRetVal),
            unstrPropListWrapper->data.get() + curOff, StorageConfig::UNSTR_PROP_DATATYPE_LEN);
-    curOff = curOffOld + StorageConfig::UNSTR_PROP_DATATYPE_LEN;
+    curOff = curOffOld;
     return dataTypeForRetVal;
 }
 

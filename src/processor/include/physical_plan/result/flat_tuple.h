@@ -29,6 +29,8 @@ public:
 
     string toString(const vector<uint32_t>& colsWidth, const string& delimiter = "|");
 
+    string toString();
+
 public:
     vector<bool> nullMask;
 
