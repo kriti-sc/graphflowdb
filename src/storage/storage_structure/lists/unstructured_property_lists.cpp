@@ -39,15 +39,20 @@ void UnstructuredPropertyLists::readPropertiesForPosition(Transaction* transacti
     UnstrPropListIterator itr;
     if (transaction->isReadOnly() || !localUpdatedLists.hasUpdatedList(nodeOffset)) {
         auto info = getListInfo(nodeOffset);
+        auto start = std::chrono::high_resolution_clock::now();
         auto primaryStoreData = make_unique<uint8_t[]>(info.numValuesInList);
         fillUnstrPropListFromPrimaryStore(info, primaryStoreData.get());
         primaryStoreListWrapper = make_unique<UnstrPropListWrapper>(
             move(primaryStoreData), info.numValuesInList, info.numValuesInList /* capacity */);
         itr = UnstrPropListIterator(primaryStoreListWrapper.get());
+        auto finish = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double> elapsed = finish - start;
+        std::cout << "Elapsed time for reading unstructured property list: " << elapsed.count() << " s\n";
     } else {
         itr = localUpdatedLists.getUpdatedListIterator(nodeOffset);
     }
 
+    auto start = std::chrono::high_resolution_clock::now();
     while (itr.hasNext()) {
         auto propertyKeyDataType = itr.readNextPropKeyValue();
         if (propertyKeyToResultVectorMap.contains(propertyKeyDataType.keyIdx)) {
@@ -71,6 +76,9 @@ void UnstructuredPropertyLists::readPropertiesForPosition(Transaction* transacti
             break;
         }
     }
+    auto finish = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> elapsed = finish - start;
+    std::cout << "Elapsed time for search, fetch and parse: " << elapsed.count() << " s\n";
     for (auto& [key, vector] : propertyKeyToResultVectorMap) {
         if (!propertyKeysFound.contains(key)) {
             vector->setNull(pos, true);

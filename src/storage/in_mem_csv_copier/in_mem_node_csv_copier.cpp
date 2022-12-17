@@ -17,6 +17,7 @@ InMemNodeCSVCopier::InMemNodeCSVCopier(CSVDescription& csvDescription, string ou
 }
 
 void InMemNodeCSVCopier::copy() {
+    auto start = std::chrono::high_resolution_clock::now();
     logger->info(
         "Copying node {} with table {}.", nodeTableSchema->tableName, nodeTableSchema->tableID);
     calculateNumBlocks(csvDescription.filePath, nodeTableSchema->tableName);
@@ -35,6 +36,9 @@ void InMemNodeCSVCopier::copy() {
     nodesStatisticsAndDeletedIDs->setMaxNodeOffsetForTable(nodeTableSchema->tableID, numNodes - 1);
     logger->info("Done copying node {} with table {}.", nodeTableSchema->tableName,
         nodeTableSchema->tableID);
+    auto finish = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> elapsed = finish - start;
+    std::cout << "Elapsed time for search, fetch and parse: " << elapsed.count() << " s\n";
 }
 
 void InMemNodeCSVCopier::initializeColumnsAndList() {
