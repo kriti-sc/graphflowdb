@@ -13,11 +13,11 @@ namespace storage {
 void UnstructuredPropertyLists::readProperties(Transaction* transaction, ValueVector* nodeIDVector,
     const unordered_map<uint32_t, ValueVector*>& propertyKeyToResultVectorMap) {
     if (nodeIDVector->state->isFlat()) {
-        cout<< "isFlat";
+        // cout<< "isFlat";
         auto pos = nodeIDVector->state->getPositionOfCurrIdx();
         readPropertiesForPosition(transaction, nodeIDVector, pos, propertyKeyToResultVectorMap);
     } else {
-        cout << "not flat";
+        // cout << "not flat";
         for (auto i = 0u; i < nodeIDVector->state->selVector->selectedSize; ++i) {
             auto pos = nodeIDVector->state->selVector->selectedPositions[i];
             readPropertiesForPositionNew(transaction, nodeIDVector, pos, propertyKeyToResultVectorMap);
@@ -104,7 +104,7 @@ void UnstructuredPropertyLists::readPropertiesForPositionNew(Transaction* transa
     ListInfo info;
     if (transaction->isReadOnly() || !localUpdatedLists.hasUpdatedList(nodeOffset)) {
         info = getListInfo(nodeOffset);
-        cout<<"Size of list: "+to_string(info.numValuesInList)<<endl;
+        // cout<<"Size of list: "+to_string(info.numValuesInList)<<endl;
         auto start = std::chrono::high_resolution_clock::now();
         auto primaryStoreData = make_unique<uint8_t[]>(info.numValuesInList);
         fillUnstrPropListFromPrimaryStore(info, primaryStoreData.get());

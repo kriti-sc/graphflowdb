@@ -124,7 +124,7 @@ void InMemUnstructuredLists::setUnstructuredElement(PageByteCursor& cursor, Data
     PageByteCursor localCursor{cursor};
     setComponentOfUnstrProperty(localCursor, StorageConfig::UNSTR_PROP_DATATYPE_LEN,
         reinterpret_cast<uint8_t*>(&dataTypeID));
-    cout<<"Passing as value length: "+ to_string(StorageConfig::UNSTR_PROP_VALUE_LEN)<<endl;
+    // cout<<"Passing as value length: "+ to_string(StorageConfig::UNSTR_PROP_VALUE_LEN)<<endl;
     switch (dataTypeID) {
     case INT64:
     case DOUBLE:
@@ -154,8 +154,8 @@ void InMemUnstructuredLists::setUnstructuredElement(PageByteCursor& cursor, Data
 
 void InMemUnstructuredLists::setComponentOfUnstrProperty(
     PageByteCursor& localCursor, uint8_t len, const uint8_t* val) {
-    cout<<"cursor "+ to_string(localCursor.offsetInPage)<<endl;
-    cout<<"len "+ to_string(len)<<endl;
+    // cout<<"cursor "+ to_string(localCursor.offsetInPage)<<endl;
+    // cout<<"len "+ to_string(len)<<endl;
     if (DEFAULT_PAGE_SIZE - localCursor.offsetInPage >= len) {
         memcpy(inMemFile->getPage(localCursor.pageIdx)->data + localCursor.offsetInPage, val, len);
         localCursor.offsetInPage += len;
@@ -170,7 +170,7 @@ void InMemUnstructuredLists::setComponentOfUnstrProperty(
         memcpy(writeOffset, val + diff, left);
         localCursor.offsetInPage = left;
     }
-    cout<<"new cursor "+ to_string(localCursor.offsetInPage)<<endl;
+    // cout<<"new cursor "+ to_string(localCursor.offsetInPage)<<endl;
 }
 //
 //void InMemUnstructuredLists::setComponentOfUnstrPropertyRED(

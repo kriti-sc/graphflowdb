@@ -67,7 +67,7 @@ public:
 
     inline uint64_t getDataTypeSizeOfCurrPropNew() {
         assert(propKeyForRetVal.keyIdx != UINT32_MAX);
-        cout << "Calling dataTypeSize"<<endl;
+        // cout << "Calling dataTypeSize"<<endl;
         return Types::getDataTypeSize(dataTypeForRetVal.dataTypeID);
     }
 
@@ -82,10 +82,10 @@ public:
 
     void copyValueOfCurrentPropNew(uint8_t* dst, uint8_t totalElementsInList, uint64_t counter) {
         int64_t oldCur = curOff;
-        cout<<"old cur for val: "+to_string(curOff)<<endl;
+        // cout<<"old cur for val: "+to_string(curOff)<<endl;
         curOff = curOff + ((counter-1)*(StorageConfig::UNSTR_PROP_DATATYPE_LEN+StorageConfig::UNSTR_PROP_VALUE_LEN)) +
                  ((totalElementsInList - counter)*StorageConfig::UNSTR_PROP_KEY_IDX_LEN) + StorageConfig::UNSTR_PROP_DATATYPE_LEN;
-        cout << "cur for val "+ to_string(curOff)<<endl;
+        // cout << "cur for val "+ to_string(curOff)<<endl;
         // memcpy(dst, unstrPropListWrapper->data.get() + curOff, getDataTypeSizeOfCurrPropNew());
         memcpy(dst, unstrPropListWrapper->data.get() + curOff, StorageConfig::UNSTR_PROP_VALUE_LEN);
         curOff = oldCur;
